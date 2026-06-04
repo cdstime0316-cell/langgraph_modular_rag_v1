@@ -2,7 +2,7 @@ from typing_extensions import TypedDict, NotRequired
 from langchain_core.documents import Document
 
 
-class RAGState(TypedDict):
+class ModularRAGState(TypedDict):
     question: str
     case_type: NotRequired[str]
     rewritten_query: NotRequired[str]

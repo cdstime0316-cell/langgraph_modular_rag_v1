@@ -46,7 +46,7 @@ def clean_markdown(RAW_MD_PATH: Path, CLEAN_MD_PATH: Path):
     print(clean_text[:1000])
 
 if __name__ == "__main__":
-    RAW_MD_PATH = Path("data/AI@Data_Report_토픽_분석을_통한_AI_주요_트렌드_및_2026_전망_251223(최종).md")
+    RAW_MD_PATH = Path("data/AI@Data_Report_2026_전망_251223(최종).md")
     CLEAN_MD_PATH = Path("data/AI@Data_Report_CLEANED.md")
 
     clean_markdown(RAW_MD_PATH, CLEAN_MD_PATH)

@@ -8,7 +8,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
-from config import (
+from lib.config import (
     QDRANT_URL,
     QDRANT_COLLECTION_NAME,
     EMBEDDING_MODEL,
