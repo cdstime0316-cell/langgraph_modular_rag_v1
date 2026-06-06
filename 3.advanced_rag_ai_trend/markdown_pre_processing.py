@@ -37,7 +37,13 @@ def clean_markdown(RAW_MD_PATH: Path, CLEAN_MD_PATH: Path):
         clean_text
     )
 
-    # 6. 과도한 빈 줄 정리
+    # 6. |||| 문자열이 포함된 라인 삭제
+    clean_text = "\n".join(
+        line for line in clean_text.splitlines()
+        if "||||" not in line
+    )
+
+    # 7. 과도한 빈 줄 정리
     clean_text = re.sub(r"\n{3,}", "\n\n", clean_text)
 
     CLEAN_MD_PATH.write_text(clean_text.strip(), encoding="utf-8")
