@@ -1,5 +1,11 @@
 from langchain_core.prompts import ChatPromptTemplate
 
+# 3단계 프롬프트 파이프라인:
+#   1) evidence_prompt : context(원본 청크) → 질문 관련 근거만 추출
+#   2) answer_prompt   : evidence(정제된 근거) → 구조화된 최종 답변 생성
+#   3) validation_prompt: (질문 + context + 답변) → 근거 충족도 평가
+# raw context를 바로 답변에 쓰지 않고 evidence 단계를 거쳐 환각을 줄임
+
 evidence_prompt = ChatPromptTemplate.from_messages([
     ("system", """
 검색된 문단에서 질문 답변에 필요한 핵심 근거만 정리하세요.
@@ -36,6 +42,8 @@ answer_prompt = ChatPromptTemplate.from_messages([
 """)
 ])
 
+# validation_prompt는 evidence가 아닌 context(원본 청크)를 사용해
+# LLM이 근거를 요약하는 과정에서 생긴 편향 없이 원문 기준으로 검증
 validation_prompt = ChatPromptTemplate.from_messages([
     ("system", """
 당신은 RAG 답변 검토자입니다.

@@ -1,4 +1,6 @@
 def classify_question(question: str) -> dict:
+    # 규칙 우선순위: 리스트 순서대로 첫 매칭에서 즉시 반환 (early-exit)
+    # 더 구체적인 유형을 앞에 배치해 모호한 키워드에 의한 오분류를 방지
     rules = [
         ("repeat_call", ["반복", "계속 전화", "같은 말", "동일"]),
         ("long_call", ["장시간", "오래", "권장시간", "20분", "15분"]),
@@ -20,6 +22,7 @@ def classify_question(question: str) -> dict:
                 "rewritten_query": rewrite_query(question, case_type),
             }
 
+    # 어떤 규칙에도 해당하지 않으면 원본 질문을 그대로 검색 쿼리로 사용
     return {
         "case_type": "general",
         "rewritten_query": question,
@@ -27,6 +30,8 @@ def classify_question(question: str) -> dict:
 
 
 def rewrite_query(question: str, case_type: str) -> str:
+    # 유형별로 벡터 검색 적중률을 높이는 키워드를 원본 질문 뒤에 덧붙임
+    # 매뉴얼 문서에 실제로 등장하는 용어 위주로 구성
     expansions = {
         "repeat_call": "정당한 사유 없는 반복전화 동일민원 통화 종료 상담 종료",
         "long_call": "정당한 사유 없는 장시간 통화 권장시간 상담 종료",

@@ -1,5 +1,12 @@
+import sys
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
+
+# 6.modular_rag_manual/ 를 sys.path에 추가해 'common.*' 를 절대 경로로 임포트
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -8,11 +15,11 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from qdrant_client import QdrantClient
 
-from lib.config import (
+from common.config import (
     QDRANT_URL,
-    QDRANT_COLLECTION_NAME,
+    COLLECTION_NAME,
     EMBEDDING_MODEL,
-    TOP_K,
+    DEFAULT_TOP_K,
 )
 
 from dotenv import load_dotenv
@@ -27,7 +34,7 @@ class SearchRequest(BaseModel):
     """검색 요청 모델"""
 
     query: str = Field(..., min_length=1, description="사용자 질문")
-    k: int = Field(default=TOP_K, ge=1, le=20, description="검색할 문서 개수")
+    k: int = Field(default=DEFAULT_TOP_K, ge=1, le=20, description="검색할 문서 개수")
 
 
 class SearchResult(BaseModel):
@@ -74,12 +81,12 @@ async def lifespan(app: FastAPI):
 
         # collection 존재 여부 확인
         exists = client.collection_exists(
-            collection_name=QDRANT_COLLECTION_NAME
+            collection_name=COLLECTION_NAME
         )
 
         if not exists:
             raise RuntimeError(
-                f"'{QDRANT_COLLECTION_NAME}' collection이 존재하지 않습니다. "
+                f"'{COLLECTION_NAME}' collection이 존재하지 않습니다. "
                 "먼저 오프라인 임베딩 작업을 수행하세요."
             )
 
@@ -89,16 +96,17 @@ async def lifespan(app: FastAPI):
         # 기존 collection에 연결
         vectorstore = QdrantVectorStore.from_existing_collection(
             embedding=embeddings,
-            collection_name=QDRANT_COLLECTION_NAME,
+            collection_name=COLLECTION_NAME,
             url=QDRANT_URL,
         )
 
+        # app.state에 저장해 각 엔드포인트에서 전역 객체 없이 접근
         app.state.qdrant_client = client
         app.state.vectorstore = vectorstore
         app.state.collection_exists = exists
 
         print("Qdrant 연결 성공")
-        print(f"collection name: {QDRANT_COLLECTION_NAME}")
+        print(f"collection name: {COLLECTION_NAME}")
         print("vectorstore 준비 완료")
 
     except Exception as e:
@@ -148,6 +156,7 @@ def root():
 
 @app.get("/health", response_model=HealthResponse)
 def health_check():
+    # lifespan에서 초기화 실패 시 app.state에 속성이 없을 수 있어 getattr 기본값 사용
     client = getattr(app.state, "qdrant_client", None)
     vectorstore = getattr(app.state, "vectorstore", None)
 
@@ -156,7 +165,7 @@ def health_check():
     if client is not None:
         try:
             collection_exists = client.collection_exists(
-                collection_name=QDRANT_COLLECTION_NAME
+                collection_name=COLLECTION_NAME
             )
         except Exception:
             collection_exists = False
@@ -164,7 +173,7 @@ def health_check():
     return HealthResponse(
         status="ok" if vectorstore is not None else "error",
         qdrant_url=QDRANT_URL,
-        collection_name=QDRANT_COLLECTION_NAME,
+        collection_name=COLLECTION_NAME,
         collection_exists=collection_exists,
         vectorstore_ready=vectorstore is not None,
     )
@@ -185,6 +194,8 @@ def search_documents(request: SearchRequest):
         )
 
     try:
+        # similarity_search_with_score: 코사인 유사도 점수를 함께 반환
+        # 클라이언트가 관련도 임계값 필터링에 활용 가능
         docs_with_scores = vectorstore.similarity_search_with_score(
             query=request.query,
             k=request.k,
@@ -217,4 +228,4 @@ def search_documents(request: SearchRequest):
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="localhost", port=8000)
+    uvicorn.run(app, host="localhost", port=8090)

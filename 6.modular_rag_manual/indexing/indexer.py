@@ -1,62 +1,93 @@
-# indexing/document_loader.py
+# indexing/indexer.py
+# 전처리 Markdown → medium chunk → Qdrant 색인 파이프라인
+# PS E:\langgraph_modular_rag\6.modular_rag_manual> python indexing/indexer.py
 
-import re
+import sys
 from pathlib import Path
 
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_core.documents import Document
+# 6.modular_rag_manual/ 를 sys.path에 추가 → 'common.*', 'indexing.*' 절대 import 가능
+_ROOT = Path(__file__).resolve().parents[1]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from langchain_openai import OpenAIEmbeddings
+from langchain_qdrant import QdrantVectorStore
+
+from common.config import (
+    CHUNK_MD_PATH,
+    QDRANT_URL,
+    COLLECTION_NAME,
+    EMBEDDING_MODEL,
+)
+from common.qdrant_connect import get_qdrant_client, collection_exists
+from indexing.document_loader import load_markdown_page_chunks
+from indexing.chunking import make_medium_chunks
 
 
-def clean_text(text: str) -> str:
-    """PDF에서 추출된 텍스트를 간단히 정제한다."""
-    text = text.replace("\x00", " ")
-    text = text.replace("\xa0", " ")
-    text = text.replace("\r\n", "\n").replace("\r", "\n")
-    text = re.sub(r"[ \t]+", " ", text)
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    return text.strip()
+# True : collection을 삭제 후 재생성 (첫 실행 또는 데이터 갱신 시)
+# False: 이미 저장된 collection을 재사용 (임베딩 비용 없음)
+# RECREATE_COLLECTION = False
+RECREATE_COLLECTION = True
 
 
-def load_pdf_pages(pdf_path: Path) -> list[Document]:
-    """PDF를 페이지 단위 Document 리스트로 로드한다."""
-    if not pdf_path.exists():
-        raise FileNotFoundError(f"PDF 파일을 찾을 수 없습니다: {pdf_path}")
+def run_indexing(
+    md_path: Path = CHUNK_MD_PATH,
+    recreate: bool = RECREATE_COLLECTION,
+) -> QdrantVectorStore:
+    """전처리 Markdown page chunk 파일을 읽어 Qdrant에 색인한다."""
 
-    loader = PyPDFLoader(str(pdf_path))
-    docs = loader.load()
+    client = get_qdrant_client()
+    embeddings = OpenAIEmbeddings(model=EMBEDDING_MODEL)
 
-    page_docs = []
+    exists = collection_exists(COLLECTION_NAME)
+    print(f"collection '{COLLECTION_NAME}' exists: {exists}")
 
-    for doc in docs:
-        text = clean_text(doc.page_content or "")
+    if recreate:
+        print("collection을 새로 생성합니다.")
 
-        if not text:
-            continue
+        # Markdown 파싱 → page-level Document 생성
+        pages = load_markdown_page_chunks(md_path)
+        medium_chunks = make_medium_chunks(pages)
 
-        page_docs.append(
-            Document(
-                page_content=text,
-                metadata={
-                    **doc.metadata,
-                    "source": pdf_path.name,
-                    "page": doc.metadata.get("page", 0) + 1,
-                },
-            )
+        print(f"page 수: {len(pages)}, medium chunk 수: {len(medium_chunks)}")
+
+        # force_recreate=True: 동일 이름 collection이 있으면 삭제 후 재생성
+        vector_store = QdrantVectorStore.from_documents(
+            documents=medium_chunks,
+            embedding=embeddings,
+            url=QDRANT_URL,
+            collection_name=COLLECTION_NAME,
+            force_recreate=True,
         )
 
-    return page_docs
+        print("색인 완료")
+
+    else:
+        if not exists:
+            raise ValueError(
+                f"'{COLLECTION_NAME}' collection이 아직 없습니다. "
+                "처음 실행할 때는 RECREATE_COLLECTION = True로 설정하세요."
+            )
+
+        # 임베딩 재생성 없이 기존 collection에 연결만 함
+        print("기존 collection을 재사용합니다.")
+
+        vector_store = QdrantVectorStore.from_existing_collection(
+            embedding=embeddings,
+            collection_name=COLLECTION_NAME,
+            url=QDRANT_URL,
+        )
+
+    return vector_store
 
 
 if __name__ == "__main__":
-    from common.config import PDF_PATH
+    vector_store = run_indexing()
 
-    pages = load_pdf_pages(PDF_PATH)
+    client = get_qdrant_client()
+    collection_info = client.get_collection(COLLECTION_NAME)
 
-    print("추출된 페이지 수:", len(pages))
-
-    if pages:
-        print("\n[첫 번째 페이지 metadata]")
-        print(pages[0].metadata)
-
-        print("\n[첫 번째 페이지 preview]")
-        print(pages[0].page_content[:500])
+    print("\n[collection 정보]")
+    print("collection name:", COLLECTION_NAME)
+    print("points count:", collection_info.points_count)
+    print("status:", collection_info.status)

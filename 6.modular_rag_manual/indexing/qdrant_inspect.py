@@ -1,5 +1,5 @@
-# indexing/inspect.py
-# PS E:\langgraph_modular_rag\6.modular_rag_manual> python -m indexing.inspect
+# indexing/qdrant_inspect.py
+# PS E:\langgraph_modular_rag\6.modular_rag_manual> python -m indexing.qdrant_inspect
 
 from pprint import pprint
 

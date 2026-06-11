@@ -7,6 +7,7 @@ from qdrant_client import QdrantClient
 from common.config import COLLECTION_NAME, QDRANT_URL, QDRANT_TIMEOUT
 
 
+# maxsize=1: 동일 URL에 대해 커넥션 풀을 재사용하기 위해 클라이언트를 싱글톤으로 유지
 @lru_cache(maxsize=1)
 def get_qdrant_client() -> QdrantClient:
     """QdrantClient를 생성한다."""
@@ -36,6 +37,7 @@ def check_qdrant_connection() -> None:
             print(f"- {collection.name}")
 
     except Exception as e:
+        # 연결 실패 원인을 원본 예외로 체이닝해 스택 트레이스를 보존
         raise RuntimeError(
             "Qdrant Server에 연결할 수 없습니다. "
             "Docker Desktop과 Qdrant 컨테이너 실행 상태를 확인하세요. "
@@ -52,6 +54,7 @@ def collection_exists(collection_name: str = COLLECTION_NAME) -> bool:
         return client.collection_exists(collection_name)
 
     except AttributeError:
+        # qdrant_client < 1.7 에는 collection_exists()가 없어 목록 조회로 대체
         collection_names = [
             collection.name
             for collection in client.get_collections().collections

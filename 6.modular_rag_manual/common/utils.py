@@ -70,6 +70,7 @@ def format_docs(docs: list[Document]) -> str:
     formatted_docs = []
 
     for i, doc in enumerate(docs, start=1):
+        # 프롬프트에서 LLM이 출처를 인용할 수 있도록 메타데이터를 헤더로 포함
         source = doc.metadata.get("source", "unknown")
         page = doc.metadata.get("page", "unknown")
         chunk_id = doc.metadata.get("chunk_id", "unknown")
@@ -79,4 +80,5 @@ def format_docs(docs: list[Document]) -> str:
             f"{doc.page_content}"
         )
 
+    # 각 청크를 빈 줄로 구분해 LLM이 근거 경계를 명확히 인식하게 함
     return "\n\n".join(formatted_docs)
